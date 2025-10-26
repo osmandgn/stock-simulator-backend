@@ -1,9 +1,13 @@
-# Stock Simulator Backend
+# Stock Simulator Backend v2.0
 
-Basit ve minimal backend API for Stock Simulator iOS app. Finnhub API kullanarak gerçek zamanlı hisse senedi fiyatları ve leaderboard yönetimi sağlar.
+Production-ready backend API for Stock Simulator iOS app with intelligent caching and background data refresh. Finnhub API kullanarak gerçek zamanlı hisse senedi fiyatları ve leaderboard yönetimi sağlar.
 
 ## 🚀 Özellikler
 
+- ✅ **Smart Caching** - In-memory cache with TTL (2-5 min)
+- ✅ **Background Refresh** - Scheduled cron jobs every 2-3 minutes
+- ✅ **30 Popular Stocks** - Auto-refreshed most traded US stocks
+- ✅ **Rate Limit Optimization** - %95+ cache hit rate
 - ✅ Real-time stock quotes (Finnhub API)
 - ✅ Company profiles with logos
 - ✅ Stock symbol search
@@ -11,7 +15,7 @@ Basit ve minimal backend API for Stock Simulator iOS app. Finnhub API kullanarak
 - ✅ Leaderboard system (in-memory)
 - ✅ Docker support
 - ✅ CORS enabled
-- ✅ Health check endpoint
+- ✅ Health check & monitoring endpoints
 
 ## 📋 Gereksinimler
 
@@ -144,7 +148,45 @@ GET /
 
 ### Stock Endpoints
 
-#### 1. Get Stock Quote
+#### 1. Get Popular Stocks (🔥 Most Used - CACHED)
+
+```bash
+GET /api/stocks/popular?limit=30
+```
+
+**Example:**
+```bash
+curl http://localhost:3000/api/stocks/popular?limit=20
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "count": 20,
+  "stocks": [
+    {
+      "symbol": "AAPL",
+      "currentPrice": 174.55,
+      "change": 1.25,
+      "percentChange": 0.72,
+      "high": 175.50,
+      "low": 173.00
+    },
+    ...
+  ],
+  "cached": true
+}
+```
+
+**Note:**
+- Default limit: 30 stocks
+- Cache TTL: 5 minutes
+- Auto-refreshed every 2 minutes by cron job
+- First request loads all 30, subsequent requests are instant (cache)
+- Initial load takes ~35 seconds
+
+#### 2. Get Stock Quote
 
 ```bash
 GET /api/stocks/quote/:symbol
@@ -167,11 +209,12 @@ curl http://localhost:3000/api/stocks/quote/AAPL
   "low": 173.00,
   "open": 174.00,
   "previousClose": 173.30,
-  "timestamp": 1698350400
+  "timestamp": 1698350400,
+  "cached": true
 }
 ```
 
-#### 2. Get Company Profile
+#### 3. Get Company Profile
 
 ```bash
 GET /api/stocks/profile/:symbol
@@ -200,7 +243,7 @@ curl http://localhost:3000/api/stocks/profile/AAPL
 }
 ```
 
-#### 3. Search Stocks
+#### 4. Search Stocks
 
 ```bash
 GET /api/stocks/search?q=query
@@ -227,7 +270,7 @@ curl "http://localhost:3000/api/stocks/search?q=apple"
 }
 ```
 
-#### 4. Batch Quotes
+#### 5. Batch Quotes
 
 ```bash
 POST /api/stocks/batch-quotes
