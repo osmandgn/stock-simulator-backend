@@ -1,7 +1,7 @@
 const NodeCache = require('node-cache');
 
 // Cache instance for NASDAQ stock list
-const nasdaqCache = new NodeCache({ stdTTL: 180 }); // 3 minutes for NASDAQ list
+const nasdaqCache = new NodeCache({ stdTTL: 60 }); // 1 minute for NASDAQ list
 
 class CacheService {
   // ========== NASDAQ STOCKS CACHE ==========

@@ -25,21 +25,12 @@ let leaderboard = [
 // SCHEDULED JOBS (Background Data Refresh)
 // ============================================
 
-// Refresh NASDAQ stock list every 3 minutes (500 stocks from stockanalysis.com)
-cron.schedule('*/3 * * * *', async () => {
+// Refresh NASDAQ stock list every 1 minute (500 stocks from stockanalysis.com)
+cron.schedule('*/1 * * * *', async () => {
   console.log('⏰ Cron: Refreshing NASDAQ stock list...');
   await nasdaqCrawler.refreshNasdaqStocks();
 });
 
-// Cache stats logging every 5 minutes
-cron.schedule('*/5 * * * *', () => {
-  console.log('⏰ Cron: Cache cleanup check');
-  const stats = cacheService.getStats();
-  console.log('📊 Cache stats:', {
-    nasdaq: stats.nasdaq.count,
-    totalStocks: stats.nasdaq.count
-  });
-});
 
 // ============================================
 // STOCK ENDPOINTS
@@ -476,8 +467,8 @@ app.get('/', (req, res) => {
     dataSource: 'stockanalysis.com (NASDAQ)',
     features: [
       '✅ 500 NASDAQ stocks (real-time)',
-      '✅ In-memory caching (3 min TTL)',
-      '✅ Auto-refresh every 3 minutes',
+      '✅ In-memory caching (1 min TTL)',
+      '✅ Auto-refresh every 1 minute',
       '✅ No rate limits (web scraping)',
       '✅ No API keys required',
       '✅ Market cap, price, revenue data'
@@ -516,8 +507,8 @@ app.listen(PORT, async () => {
   console.log(`📊 Data Source: stockanalysis.com (NASDAQ)`);
   console.log(`\n🔧 Configuration:`);
   console.log(`   Port: ${PORT}`);
-  console.log(`   Cache TTL: NASDAQ=3min`);
-  console.log(`   Cron Jobs: NASDAQ refresh every 3min`);
+  console.log(`   Cache TTL: NASDAQ=1min`);
+  console.log(`   Cron Jobs: NASDAQ refresh every 1min`);
   console.log(`   API Keys: None required! 🎉`);
 
   // Initial data load
