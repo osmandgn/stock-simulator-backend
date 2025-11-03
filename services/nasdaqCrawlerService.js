@@ -1,55 +1,65 @@
 const axios = require('axios');
 const cacheService = require('./cacheService');
 
-const NASDAQ_LIST_URL = 'https://stockanalysis.com/list/nasdaq-stocks/';
+const NASDAQ_API_URL = 'https://stockanalysis.com/api/screener/s/f';
 
 class NasdaqCrawlerService {
-  // Fetch and parse NASDAQ stock list from stockanalysis.com
+  // Fetch and parse NASDAQ stock list from stockanalysis.com API
   async fetchNasdaqStocks() {
     try {
-      console.log('🕷️  Crawling NASDAQ stock list from stockanalysis.com...');
+      console.log('🕷️  Fetching NASDAQ stock list from stockanalysis.com API (2000 stocks, 4 pages)...');
 
-      // Fetch the page
-      const response = await axios.get(NASDAQ_LIST_URL, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
+      const allStocks = [];
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://stockanalysis.com/list/nasdaq-stocks/',
+      };
+
+      // Fetch 4 pages (500 stocks per page = 2000 total)
+      for (let page = 1; page <= 4; page++) {
+        console.log(`   Fetching page ${page}/4...`);
+
+        const response = await axios.get(NASDAQ_API_URL, {
+          headers,
+          params: {
+            m: 's',
+            s: 'asc',
+            c: 's,n,marketCap,price,change,changep,revenue',
+            cn: '500',
+            p: page.toString(),
+            i: 'stocks'
+          }
+        });
+
+        const data = response.data;
+
+        if (!data.data || !data.data.data) {
+          console.error(`❌ Failed to get stock data from page ${page}`);
+          continue;
         }
-      });
 
-      const html = response.data;
+        // Transform to our format
+        const pageStocks = data.data.data.map(stock => ({
+          symbol: stock.s,
+          companyName: stock.n,
+          marketCap: stock.marketCap || 0,
+          price: stock.price || 0,
+          change: stock.change || 0,
+          percentChange: stock.changep || 0,
+          revenue: stock.revenue || 0
+        }));
 
-      // Extract JavaScript array from the page source
-      // The data is embedded in a script tag like: stockData: [{no:1, s:"NVDA", ...}]
-      const dataMatch = html.match(/stockData:\s*(\[[\s\S]*?\])\s*[,}]/);
-
-      if (!dataMatch) {
-        console.error('❌ Failed to extract stock data from page');
-        return [];
+        allStocks.push(...pageStocks);
+        console.log(`   ✓ Page ${page}: ${pageStocks.length} stocks`);
       }
 
-      // Use Function constructor to safely evaluate the JavaScript array
-      // This is safer than eval() and handles JavaScript object notation properly
-      const stockData = new Function(`return ${dataMatch[1]}`)();
+      console.log(`✅ Successfully fetched ${allStocks.length} NASDAQ stocks`);
+      console.log(`   Top 5: ${allStocks.slice(0, 5).map(s => s.symbol).join(', ')}`);
 
-      // Transform to our format (first 500 stocks)
-      const stocks = stockData.slice(0, 500).map(stock => ({
-        symbol: stock.s,
-        companyName: stock.n,
-        marketCap: stock.marketCap || 0,
-        price: stock.price || 0,
-        change: stock.change || 0,
-        percentChange: stock.changesPercentage || 0,
-        revenue: stock.revenue || 0
-      }));
-
-      console.log(`✅ Successfully crawled ${stocks.length} NASDAQ stocks`);
-      console.log(`   Top 5: ${stocks.slice(0, 5).map(s => s.symbol).join(', ')}`);
-
-      return stocks;
+      return allStocks;
     } catch (error) {
-      console.error('❌ NASDAQ Crawler Error:', error.message);
+      console.error('❌ NASDAQ API Error:', error.message);
       return [];
     }
   }

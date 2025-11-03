@@ -4,6 +4,12 @@ const cors = require('cors');
 const cron = require('node-cron');
 const cacheService = require('./services/cacheService');
 const nasdaqCrawler = require('./services/nasdaqCrawlerService');
+const db = require('./services/databaseService');
+const { authenticateApiKey } = require('./middleware/authMiddleware');
+
+// Routes
+const authRoutes = require('./routes/auth');
+const leaderboardRoutes = require('./routes/leaderboard');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,20 +18,19 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// In-memory leaderboard
-let leaderboard = [
-  { userId: '1', username: 'OsmanD', totalReturn: 12450.50, rank: 1 },
-  { userId: '2', username: 'TechTrader', totalReturn: 9800.25, rank: 2 },
-  { userId: '3', username: 'StockMaster', totalReturn: 7500.00, rank: 3 },
-  { userId: '4', username: 'InvestorPro', totalReturn: 5200.75, rank: 4 },
-  { userId: '5', username: 'BullRunner', totalReturn: 3100.50, rank: 5 }
-];
+// Public routes (no authentication required)
+app.use('/api/auth', authRoutes);
+
+// Apply API key authentication to stock and leaderboard routes
+app.use('/api/stocks/*', authenticateApiKey);
+app.use('/api/leaderboard', authenticateApiKey, leaderboardRoutes);
+app.use('/api/admin/*', authenticateApiKey);
 
 // ============================================
 // SCHEDULED JOBS (Background Data Refresh)
 // ============================================
 
-// Refresh NASDAQ stock list every 1 minute (500 stocks from stockanalysis.com)
+// Refresh NASDAQ stock list every 1 minute (2000 stocks from stockanalysis.com)
 cron.schedule('*/1 * * * *', async () => {
   console.log('⏰ Cron: Refreshing NASDAQ stock list...');
   await nasdaqCrawler.refreshNasdaqStocks();
@@ -139,7 +144,7 @@ app.get('/api/stocks/search', async (req, res) => {
       success: true,
       count: results.length,
       results,
-      source: 'NASDAQ (500 stocks)'
+      source: 'NASDAQ (2000 stocks)'
     });
   } catch (error) {
     res.status(500).json({
@@ -153,7 +158,7 @@ app.get('/api/stocks/search', async (req, res) => {
 // Get popular stocks from NASDAQ list (CACHED)
 app.get('/api/stocks/popular', async (req, res) => {
   try {
-    const { limit = 500 } = req.query;
+    const { limit = 2000 } = req.query;
     const stocks = await nasdaqCrawler.getPopularStocks(parseInt(limit));
 
     res.json({
@@ -280,114 +285,6 @@ app.post('/api/stocks/batch-profiles', async (req, res) => {
 });
 
 // ============================================
-// LEADERBOARD ENDPOINTS
-// ============================================
-
-// Get leaderboard
-app.get('/api/leaderboard', (req, res) => {
-  try {
-    const { limit = 100 } = req.query;
-
-    // Sort by total return
-    const sorted = [...leaderboard].sort((a, b) => b.totalReturn - a.totalReturn);
-
-    // Update ranks
-    sorted.forEach((user, index) => {
-      user.rank = index + 1;
-    });
-
-    res.json({
-      success: true,
-      count: sorted.length,
-      leaderboard: sorted.slice(0, parseInt(limit))
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch leaderboard',
-      message: error.message
-    });
-  }
-});
-
-// Update user stats
-app.post('/api/leaderboard/update', (req, res) => {
-  try {
-    const { userId, username, totalReturn } = req.body;
-
-    if (!userId || !username || totalReturn === undefined) {
-      return res.status(400).json({
-        success: false,
-        error: 'userId, username, and totalReturn are required'
-      });
-    }
-
-    // Find existing user
-    const existingIndex = leaderboard.findIndex(u => u.userId === userId);
-
-    if (existingIndex !== -1) {
-      // Update existing user
-      leaderboard[existingIndex].username = username;
-      leaderboard[existingIndex].totalReturn = totalReturn;
-    } else {
-      // Add new user
-      leaderboard.push({
-        userId,
-        username,
-        totalReturn,
-        rank: 0
-      });
-    }
-
-    // Sort and update ranks
-    leaderboard.sort((a, b) => b.totalReturn - a.totalReturn);
-    leaderboard.forEach((user, index) => {
-      user.rank = index + 1;
-    });
-
-    const userRank = leaderboard.find(u => u.userId === userId);
-
-    res.json({
-      success: true,
-      message: 'Leaderboard updated',
-      user: userRank
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update leaderboard',
-      message: error.message
-    });
-  }
-});
-
-// Get user stats
-app.get('/api/leaderboard/user/:userId', (req, res) => {
-  try {
-    const { userId } = req.params;
-    const user = leaderboard.find(u => u.userId === userId);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      user
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch user stats',
-      message: error.message
-    });
-  }
-});
-
-// ============================================
 // ADMIN / MONITORING ENDPOINTS
 // ============================================
 
@@ -466,7 +363,7 @@ app.get('/', (req, res) => {
     version: '4.0.0',
     dataSource: 'stockanalysis.com (NASDAQ)',
     features: [
-      '✅ 500 NASDAQ stocks (real-time)',
+      '✅ 2000 NASDAQ stocks (real-time)',
       '✅ In-memory caching (1 min TTL)',
       '✅ Auto-refresh every 1 minute',
       '✅ No rate limits (web scraping)',
@@ -476,7 +373,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: 'GET /health',
       stocks: {
-        popular: 'GET /api/stocks/popular?limit=500',
+        popular: 'GET /api/stocks/popular?limit=2000',
         trending: 'GET /api/stocks/trending (Top 10)',
         quote: 'GET /api/stocks/quote/:symbol',
         profile: 'GET /api/stocks/profile/:symbol',
@@ -503,17 +400,25 @@ app.get('/', (req, res) => {
 // ============================================
 
 app.listen(PORT, async () => {
-  console.log('🚀 Stock Simulator Backend v4.0 - NASDAQ Only Edition');
+  console.log('🚀 Stock Simulator Backend v5.0 - Production Ready');
   console.log(`📊 Data Source: stockanalysis.com (NASDAQ)`);
+  console.log(`💾 Database: PostgreSQL`);
   console.log(`\n🔧 Configuration:`);
   console.log(`   Port: ${PORT}`);
+  console.log(`   DB Host: ${process.env.DB_HOST}:${process.env.DB_PORT}`);
   console.log(`   Cache TTL: NASDAQ=1min`);
   console.log(`   Cron Jobs: NASDAQ refresh every 1min`);
-  console.log(`   API Keys: None required! 🎉`);
+
+  // Test database connection
+  console.log(`\n🔌 Testing database connection...`);
+  const dbConnected = await db.testConnection();
+  if (!dbConnected) {
+    console.error('❌ Database connection failed! Server may not work properly.');
+  }
 
   // Initial data load
   console.log(`\n📥 Loading initial data...`);
-  console.log(`🕷️  Crawling NASDAQ stock list (500 stocks)...`);
+  console.log(`🕷️  Crawling NASDAQ stock list (2000 stocks)...`);
   console.log(`💡 This takes ~2-3 seconds via web scraping!\n`);
 
   try {
@@ -528,15 +433,32 @@ app.listen(PORT, async () => {
     console.error('❌ Failed to load initial data:', error.message);
   }
 
-  console.log(`\n📍 Endpoints:`);
-  console.log(`   Health:   http://localhost:${PORT}/health`);
-  console.log(`   Popular:  http://localhost:${PORT}/api/stocks/popular?limit=50`);
-  console.log(`   All:      http://localhost:${PORT}/api/stocks/popular?limit=500`);
-  console.log(`   Trending: http://localhost:${PORT}/api/stocks/trending`);
-  console.log(`   Quote:    http://localhost:${PORT}/api/stocks/quote/AAPL`);
-  console.log(`   Search:   http://localhost:${PORT}/api/stocks/search?q=apple`);
-  console.log(`   Board:    http://localhost:${PORT}/api/leaderboard`);
-  console.log(`   Stats:    http://localhost:${PORT}/api/admin/cache/stats`);
+  console.log(`\n📍 Main Endpoints:`);
+  console.log(`   Auth:`);
+  console.log(`     Register: POST   http://localhost:${PORT}/api/auth/register`);
+  console.log(`     Login:    POST   http://localhost:${PORT}/api/auth/login`);
+  console.log(`     Profile:  GET    http://localhost:${PORT}/api/auth/profile`);
+  console.log(`   Stocks:`);
+  console.log(`     Popular:  GET    http://localhost:${PORT}/api/stocks/popular?limit=50`);
+  console.log(`     Quote:    GET    http://localhost:${PORT}/api/stocks/quote/AAPL`);
+  console.log(`     Search:   GET    http://localhost:${PORT}/api/stocks/search?q=apple`);
+  console.log(`   Leaderboard:`);
+  console.log(`     Get:      GET    http://localhost:${PORT}/api/leaderboard?userId=xxx`);
+  console.log(`     Update:   POST   http://localhost:${PORT}/api/leaderboard/update`);
+  console.log(`     Stats:    GET    http://localhost:${PORT}/api/leaderboard/stats/:userId`);
 
   console.log(`\n✨ Ready to accept requests!\n`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('\n🛑 SIGTERM received, shutting down gracefully...');
+  await db.shutdown();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('\n🛑 SIGINT received, shutting down gracefully...');
+  await db.shutdown();
+  process.exit(0);
 });
