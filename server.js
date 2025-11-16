@@ -462,3 +462,103 @@ process.on('SIGINT', async () => {
   await db.shutdown();
   process.exit(0);
 });
+
+// ============================================
+// USER STATS & LEADERBOARD ENDPOINTS (v5.1)
+// ============================================
+
+// POST - Save/Update user stats
+app.post('/api/user-stats', authenticateApiKey, async (req, res) => {
+  try {
+    const { userId, totalReturn, portfolioValue } = req.body;
+
+    if (!userId || totalReturn === undefined || portfolioValue === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: userId, totalReturn, portfolioValue'
+      });
+    }
+
+    if (isNaN(totalReturn) || isNaN(portfolioValue)) {
+      return res.status(400).json({
+        success: false,
+        error: 'totalReturn and portfolioValue must be numbers'
+      });
+    }
+
+    const result = await db.query(
+      `INSERT INTO users (id, email, username, total_return, portfolio_value, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+       ON CONFLICT (id) DO UPDATE SET
+         total_return = $4,
+         portfolio_value = $5,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING id, total_return, portfolio_value, updated_at;`,
+      [userId, `user_${userId}@stock-simulator.app`, `user_${userId}`, totalReturn, portfolioValue]
+    );
+
+    const userData = result.rows[0];
+    const rankResult = await db.query(
+      `SELECT COUNT(*) as rank FROM users WHERE total_return > $1;`,
+      [totalReturn]
+    );
+    const currentRank = rankResult.rows[0].rank + 1;
+
+    res.json({
+      success: true,
+      message: 'User stats saved successfully',
+      user: {
+        userId,
+        totalReturn,
+        portfolioValue,
+        rank: currentRank,
+        lastUpdated: userData.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error saving user stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to save user stats',
+      message: error.message
+    });
+  }
+});
+
+// GET - Top 10 users by total return
+app.get('/api/leaderboard/top10', authenticateApiKey, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT
+         id as "userId",
+         username,
+         total_return as "totalReturn",
+         portfolio_value as "portfolioValue"
+       FROM users
+       ORDER BY total_return DESC
+       LIMIT 10;`
+    );
+
+    const leaderboard = result.rows.map((user, index) => ({
+      rank: index + 1,
+      userId: user.userId,
+      username: user.username,
+      totalReturn: parseFloat(user.totalReturn),
+      portfolioValue: parseFloat(user.portfolioValue)
+    }));
+
+    res.json({
+      success: true,
+      count: leaderboard.length,
+      leaderboard,
+      source: 'Stock Simulator Database'
+    });
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch leaderboard',
+      message: error.message
+    });
+  }
+});
