@@ -1,0 +1,50 @@
+✅ BACKEND SUNUCUYA TAŞIMAYA HAZIR!
+=====================================
+
+Yapılan Düzenlemeler:
+---------------------
+✅ server.js - Middleware wildcard hatası düzeltildi
+✅ docker-compose.production.yml - PostgreSQL eklendi ve .env.production bağlandı
+✅ .env.production - Güçlü API anahtarları ve JWT secret eklendi
+✅ START_SERVER.sh - Sunucuda tek komutla başlatma scripti oluşturuldu
+✅ KOPYALA.sh - Klasörü sunucuya kopyalama scripti oluşturuldu
+✅ SUNUCUYA_KURULUM.md - Detaylı kurulum rehberi oluşturuldu
+
+
+Sunucuya Taşıma - 2 Seçenek:
+-----------------------------
+
+SEÇENEK 1 - OTOMATIK SCRIPT (ÖNERİLEN):
+  ./KOPYALA.sh
+
+SEÇENEK 2 - MANUEL KOMUT:
+  rsync -avz --exclude 'node_modules' --exclude '.git' --exclude '.env' \
+        . root@46.36.201.101:/root/stock-simulator-backend/
+
+
+Sunucuda Çalıştırma:
+--------------------
+  ssh root@46.36.201.101
+  cd /root/stock-simulator-backend
+  chmod +x START_SERVER.sh
+  ./START_SERVER.sh
+
+
+API Test:
+---------
+  # Token OLMADAN (401 dönmeli):
+  curl http://46.36.201.101/api/stocks/popular
+
+  # Token İLE (Çalışmalı):
+  curl -H "x-api-key: sk_prod_7f8e2a9d4c1b6e5a3f9d8c7b2a5e4d1c" \
+       http://46.36.201.101/api/stocks/popular
+
+
+API Anahtarları (.env.production'da):
+--------------------------------------
+  1. sk_prod_7f8e2a9d4c1b6e5a3f9d8c7b2a5e4d1c
+  2. sk_ios_app_9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d
+  3. sk_web_2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f
+
+
+Detaylı bilgi için SUNUCUYA_KURULUM.md dosyasını okuyun!

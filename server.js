@@ -22,9 +22,9 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 // Apply API key authentication to stock and leaderboard routes
-app.use('/api/stocks/*', authenticateApiKey);
+app.use('/api/stocks', authenticateApiKey);
 app.use('/api/leaderboard', authenticateApiKey, leaderboardRoutes);
-app.use('/api/admin/*', authenticateApiKey);
+app.use('/api/admin', authenticateApiKey);
 
 // ============================================
 // SCHEDULED JOBS (Background Data Refresh)
